@@ -1,27 +1,49 @@
-[
+{
+  "type": "FeatureCollection",
+  "features": [
     {
-      "name": "스타벅스 노원역점",
-      "address": "서울 노원구 동일로 1413 (상계동)" ,
-      "latitude": 37.6547,
-      "longitude": 127.0579
+      "type": "Feature",
+      "properties": {
+        "name": "스타벅스 노원역점",
+        "address": "서울 노원구 동일로 1413"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [127.0579, 37.6547]
+      }
     },
     {
-      "name": "스타벅스 노원상계점",
-      "address": "서울 노원구 동일로215길 2 (상계동)" ,
-      "latitude": 37.6562,
-      "longitude": 127.0595
+      "type": "Feature",
+      "properties": {
+        "name": "스타벅스 노원상계점",
+        "address": "서울 노원구 동일로215길 2"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [127.0595, 37.6562]
+      }
     },
     {
-      "name": "스타벅스 은행사거리점",
-      "address": "서울 노원구 중계동 중계로 217 중흥빌딩 1층·2층" ,
-      "latitude": 37.6515,
-      "longitude": 127.0734
+      "type": "Feature",
+      "properties": {
+        "name": "스타벅스 은행사거리점",
+        "address": "서울 노원구 중계동 중계로 217"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [127.0734, 37.6515]
+      }
     },
     {
-      "name": "스타벅스 노원KT점",
-      "address": "서울 노원구 상계동 723" ,
-      "latitude": 37.6573,
-      "longitude": 127.0558
+      "type": "Feature",
+      "properties": {
+        "name": "스타벅스 노원KT점",
+        "address": "서울 노원구 상계동 723"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [127.0558, 37.6573]
+      }
     }
   ]
-  
+}
