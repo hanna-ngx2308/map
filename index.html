@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>노원구 스타벅스 지도</title>
+  <title>Starbucks Map - 노원구</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map { height: 600px; width: 100%; }
@@ -14,50 +14,37 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Khởi tạo bản đồ
+    // Khởi tạo bản đồ tại 노원구
     var map = L.map('map').setView([37.6547, 127.0579], 14);
 
-    // Thêm tile layer (nền bản đồ)
+    // Thêm tile layer (bản đồ nền từ OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Dữ liệu GeoJSON
-    var starbucksData = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "properties": { "name": "스타벅스 노원역점", "address": "서울 노원구 동일로 1413" },
-          "geometry": { "type": "Point", "coordinates": [127.0579, 37.6547] }
-        },
-        {
-          "type": "Feature",
-          "properties": { "name": "스타벅스 노원상계점", "address": "서울 노원구 동일로215길 2" },
-          "geometry": { "type": "Point", "coordinates": [127.0595, 37.6562] }
-        },
-        {
-          "type": "Feature",
-          "properties": { "name": "스타벅스 은행사거리점", "address": "서울 노원구 중계동 중계로 217" },
-          "geometry": { "type": "Point", "coordinates": [127.0734, 37.6515] }
-        },
-        {
-          "type": "Feature",
-          "properties": { "name": "스타벅스 노원KT점", "address": "서울 노원구 상계동 723" },
-          "geometry": { "type": "Point", "coordinates": [127.0558, 37.6573] }
-        }
-      ]
-    };
+    // Định nghĩa icon Starbucks (logo)
+    var starbucksIcon = L.icon({
+      iconUrl: 'https://upload.wikimedia.org/wikipedia/sco/thumb/d/d3/Starbucks_Coffee_Logo.svg/1200px-Starbucks_Coffee_Logo.svg.png',
+      iconSize: [40, 40], // kích thước icon
+      iconAnchor: [20, 20], // điểm neo (giữa icon)
+      popupAnchor: [0, -20] // vị trí popup so với icon
+    });
 
-    // Hiển thị dữ liệu GeoJSON trên bản đồ
-    L.geoJSON(starbucksData, {
-      onEachFeature: function (feature, layer) {
-        if (feature.properties && feature.properties.name) {
-          layer.bindPopup("<b>" + feature.properties.name + "</b><br>" + feature.properties.address);
-        }
-      }
-    }).addTo(map);
+    // Dữ liệu Starbucks (GeoJSON đơn giản)
+    var starbucksData = [
+      { name: "스타벅스 노원역점", address: "서울 노원구 동일로 1413", lat: 37.6547, lng: 127.0579 },
+      { name: "스타벅스 노원상계점", address: "서울 노원구 동일로215길 2", lat: 37.6562, lng: 127.0595 },
+      { name: "스타벅스 은행사거리점", address: "서울 노원구 중계동 중계로 217", lat: 37.6515, lng: 127.0734 },
+      { name: "스타벅스 노원KT점", address: "서울 노원구 상계동 723", lat: 37.6573, lng: 127.0558 }
+    ];
+
+    // Thêm markers với logo Starbucks
+    starbucksData.forEach(function(store) {
+      L.marker([store.lat, store.lng], { icon: starbucksIcon })
+        .addTo(map)
+        .bindPopup("<b>" + store.name + "</b><br>" + store.address);
+    });
   </script>
 </body>
 </html>
