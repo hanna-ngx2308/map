@@ -17,21 +17,21 @@
     // Khởi tạo bản đồ tại 노원구
     var map = L.map('map').setView([37.6547, 127.0579], 14);
 
-    // Thêm tile layer (bản đồ nền từ OpenStreetMap)
+    // Thêm tile layer (nền bản đồ từ OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Định nghĩa icon Starbucks (logo)
+    // Định nghĩa icon Starbucks (logo chính thức 2011)
     var starbucksIcon = L.icon({
-      iconUrl: 'https://upload.wikimedia.org/wikipedia/sco/thumb/d/d3/Starbucks_Coffee_Logo.svg/1200px-Starbucks_Coffee_Logo.svg.png',
-      iconSize: [40, 40], // kích thước icon
-      iconAnchor: [20, 20], // điểm neo (giữa icon)
-      popupAnchor: [0, -20] // vị trí popup so với icon
+      iconUrl: 'https://upload.wikimedia.org/wikipedia/sco/d/d3/Starbucks_Corporation_Logo_2011.svg',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20]
     });
 
-    // Dữ liệu Starbucks (GeoJSON đơn giản)
+    // Dữ liệu Starbucks (điểm mẫu)
     var starbucksData = [
       { name: "스타벅스 노원역점", address: "서울 노원구 동일로 1413", lat: 37.6547, lng: 127.0579 },
       { name: "스타벅스 노원상계점", address: "서울 노원구 동일로215길 2", lat: 37.6562, lng: 127.0595 },
