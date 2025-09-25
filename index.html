@@ -22,8 +22,65 @@
     }
     .leaflet-popup-content b { font-size: 14px; }
     .leaflet-popup-content small { color:#555; }
+    
+    /* Custom Starbucks Icon Styles */
+    .starbucks-icon {
+      background: #00704A;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .starbucks-icon::before {
+      content: "☕";
+    }
+    
+    /* Popup Styling */
+    .custom-popup {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-width: 200px;
+    }
+    
+    .popup-title {
+      color: #00704A;
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 5px;
+    }
+    
+    .popup-address {
+      color: #333;
+      font-size: 14px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    
+    .popup-coords {
+      color: #666;
+      font-size: 12px;
+      font-style: italic;
+      background: #f8f8f8;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+    
     @media (prefers-color-scheme: dark) {
       .map-title { background: rgba(32,32,32,0.85); color: #e8e8e8; }
+      .popup-title { color: #4CAF50; }
+      .popup-address { color: #e0e0e0; }
+      .popup-coords { 
+        color: #ccc; 
+        background: #333; 
+      }
     }
   </style>
 </head>
@@ -37,3 +94,108 @@
 
   <div id="map"></div>
   <div class="map-title">노원구 스타벅스 지도</div>
+
+  <script>
+    // Initialize the map
+    const map = L.map('map').setView([37.655, 127.062], 14);
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Create custom Starbucks icon
+    const starbucksIcon = L.divIcon({
+      className: 'starbucks-icon',
+      iconSize: [35, 35],
+      iconAnchor: [17, 17],
+      popupAnchor: [0, -17]
+    });
+
+    // Create marker cluster group for better performance
+    const markerClusterGroup = L.markerClusterGroup({
+      chunkedLoading: true,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true
+    });
+
+    // Load and display Starbucks locations
+    fetch('data.json')
+      .then(response => response.json())
+      .then(data => {
+        const bounds = [];
+        
+        data.forEach((location, index) => {
+          // Create marker with custom icon
+          const marker = L.marker([location.latitude, location.longitude], {
+            icon: starbucksIcon
+          });
+
+          // Create popup content
+          const popupContent = `
+            <div class="custom-popup">
+              <div class="popup-title">${location.name}</div>
+              <div class="popup-address">📍 ${location.address}</div>
+              <div class="popup-coords">
+                위도: ${location.latitude.toFixed(4)}<br>
+                경도: ${location.longitude.toFixed(4)}
+              </div>
+            </div>
+          `;
+
+          marker.bindPopup(popupContent);
+          markerClusterGroup.addLayer(marker);
+          
+          bounds.push([location.latitude, location.longitude]);
+        });
+
+        // Add marker cluster to map
+        map.addLayer(markerClusterGroup);
+
+        // Fit map to show all markers
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, {
+            padding: [30, 30]
+          });
+        }
+
+        console.log(`✅ Loaded ${data.length} Starbucks locations`);
+      })
+      .catch(error => {
+        console.error('❌ Error loading data:', error);
+        
+        // Show error popup
+        L.popup()
+          .setLatLng([37.655, 127.062])
+          .setContent(`
+            <div style="color: red; font-weight: bold;">
+              ⚠️ 데이터를 불러올 수 없습니다<br>
+              <small>data.json 파일을 확인해주세요</small>
+            </div>
+          `)
+          .openOn(map);
+      });
+
+    // Add map controls
+    L.control.zoom({
+      position: 'topright'
+    }).addTo(map);
+
+    L.control.scale({
+      position: 'bottomleft',
+      metric: true,
+      imperial: false
+    }).addTo(map);
+
+    // Add click event for debugging
+    map.on('click', function(e) {
+      console.log('Clicked at:', e.latlng);
+    });
+
+    // Add marker cluster events
+    markerClusterGroup.on('clusterclick', function (a) {
+      console.log('Cluster clicked:', a.layer.getAllChildMarkers().length, 'markers');
+    });
+  </script>
