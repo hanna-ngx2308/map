@@ -5,119 +5,331 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>서울 써브웨이 매장 지도</title>
 
-  <!-- Leaflet & MarkerCluster CSS -->
+  <!-- Leaflet & MarkerCluster CSS (CDN) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 
   <style>
     :root{ --bg:#f6f7f9; --border:#e5e7eb; --muted:#64748b; --brand:#1da64a; }
-    html,body{height:100%;margin:0;background:var(--bg);
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif}
-    #map{height:100vh;width:100%}
+    html,body{
+      height:100%; margin:0; background:var(--bg);
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif;
+    }
+    #map{ height:100vh; width:100% }
+
+    /* Thanh nổi trên cùng: tiêu đề + nút */
     .topbar{
-      position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;
-      background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:14px;
-      padding:8px 14px;box-shadow:0 4px 16px rgba(0,0,0,.08);display:flex;gap:10px;align-items:center
+      position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:1000;
+      background:rgba(255,255,255,.95); border:1px solid var(--border); border-radius:14px;
+      padding:8px 14px; box-shadow:0 4px 16px rgba(0,0,0,.08);
+      display:flex; gap:10px; align-items:center;
     }
-    .btn{border:1px solid var(--border);background:#fff;padding:6px 10px;border-radius:10px;cursor:pointer}
-    .btn:hover{background:#f2f2f2}
+    .btn{
+      border:1px solid var(--border); background:#fff; padding:6px 10px; border-radius:10px; cursor:pointer;
+    }
+    .btn:hover{ background:#f2f2f2 }
+
+    /* Chú giải góc phải dưới */
     .legend{
-      position:fixed;right:12px;bottom:12px;z-index:1000;
-      background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:12px;
-      padding:8px 10px;font-size:12px;color:var(--muted)
+      position:fixed; right:12px; bottom:12px; z-index:1000;
+      background:rgba(255,255,255,.94); border:1px solid var(--border); border-radius:12px;
+      padding:8px 10px; font-size:12px; color:var(--muted)
     }
-    .logo-swatch{width:14px;height:14px;border-radius:4px;background:var(--brand);display:inline-block;margin-right:6px}
-    .notice{
-      position:fixed;left:12px;bottom:12px;z-index:1000;
-      background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:12px;
-      padding:8px 10px;font-size:12px;color:var(--muted);display:none
+    .logo-swatch{ width:14px; height:14px; border-radius:4px; background:var(--brand); display:inline-block; margin-right:6px }
+
+    /* Ô trạng thái góc trái dưới (hiển thị tiến trình geocode) */
+    .status{
+      position:fixed; left:12px; bottom:12px; z-index:1000;
+      background:rgba(255,255,255,.94); border:1px solid var(--border); border-radius:12px;
+      padding:8px 10px; font-size:12px; color:var(--muted)
     }
   </style>
 </head>
 <body>
+  <!-- Topbar: tiêu đề + các nút tiện ích -->
   <div class="topbar">
     <b>서울 써브웨이 매장 지도</b>
     <button id="fitAll" class="btn">모두 보기</button>
+    <button id="clearCache" class="btn">지오코딩 캐시 삭제</button>
   </div>
-  <div id="map"></div>
-  <div class="legend"><span class="logo-swatch"></span>써브웨이 매장 · CartoDB Positron</div>
-  <div id="notice" class="notice"></div>
 
-  <!-- Leaflet & MarkerCluster JS -->
+  <!-- Bản đồ -->
+  <div id="map"></div>
+
+  <!-- Chú giải -->
+  <div class="legend"><span class="logo-swatch"></span>써브웨이 매장 · CartoDB Positron</div>
+
+  <!-- Trạng thái -->
+  <div id="status" class="status">준비됨</div>
+
+  <!-- Leaflet & MarkerCluster JS (CDN) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // 1) Init map (light gray basemap)
-    const map = L.map('map').setView([37.5665, 126.9780], 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap & CARTO'
-    }).addTo(map);
+  /* =========================================================
+     0) DỮ LIỆU INLINE — chính xác theo JSON bạn cung cấp
+     ========================================================= */
+  const STORES = [
+    {
+      "name": "써브웨이 서울고속터미널점",
+      "address": {
+        "road": "서울특별시 서초구 신반포로 194 강남고속버스터미널 지하1층 10호",
+        "jibeon": "서울특별시 서초구 반포동 19-4"
+      },
+      "district": "서초구",
+      "phone": null,
+      "geo": { "lat": 37.505681, "lng": 127.005846 },
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 성대점",
+      "address": {
+        "road": "서울특별시 종로구 창경궁로 234 동화빌딩",
+        "jibeon": "서울특별시 종로구 명륜4가 188-4"
+      },
+      "district": "종로구",
+      "phone": "02-741-0677",
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 한양대점",
+      "address": {
+        "road": "서울특별시 성동구 마조로 11",
+        "jibeon": null
+      },
+      "district": "성동구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 종로점",
+      "address": {
+        "road": "서울특별시 종로구 종로 77 (종로2가)",
+        "jibeon": null
+      },
+      "district": "종로구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 종로5가점",
+      "address": {
+        "road": "서울특별시 종로구 종로 213-1",
+        "jibeon": "서울특별시 종로구 종로5가 88-4"
+      },
+      "district": "종로구",
+      "phone": "02-766-7537",
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 서울성균관대점",
+      "address": {
+        "road": "서울특별시 종로구 성균관로 25-2",
+        "jibeon": "서울특별시 종로구 명륜3가 53-22"
+      },
+      "district": "종로구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 홍대입구역점",
+      "address": {
+        "road": "서울특별시 마포구 양화로 160",
+        "jibeon": null
+      },
+      "district": "마포구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 강남역점",
+      "address": {
+        "road": "서울특별시 강남구 강남대로 390",
+        "jibeon": null
+      },
+      "district": "강남구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 잠실새내역점",
+      "address": {
+        "road": "서울특별시 송파구 올림픽로 124",
+        "jibeon": null
+      },
+      "district": "송파구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    },
+    {
+      "name": "써브웨이 왕십리역점",
+      "address": {
+        "road": "서울특별시 성동구 왕십리로 315",
+        "jibeon": null
+      },
+      "district": "성동구",
+      "phone": null,
+      "geo": null,
+      "source": "https://m.subway.co.kr/more/findStore/list"
+    }
+  ];
 
-    // 2) Marker icon (Subway-like green SVG)
-    const svgIcon = (size=34) => {
-      const svg = encodeURIComponent(`
-        <svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 48 48'>
-          <circle cx='24' cy='24' r='22' fill='#1da64a' stroke='white' stroke-width='3'/>
-          <path d='M16 26h10l-4 6h6l8-10-8-10h-6l4 6H16z' fill='white'/>
-        </svg>
-      `);
-      return L.icon({
-        iconUrl:'data:image/svg+xml;charset=UTF-8,'+svg,
-        iconSize:[size,size], iconAnchor:[size/2,size-4], popupAnchor:[0,-size/2]
-      });
-    };
-    const markerIcon = svgIcon(36);
+  /* =========================================================
+     1) KHỞI TẠO BẢN ĐỒ — nền CartoDB Positron (xám sáng)
+     ========================================================= */
+  const map = L.map('map').setView([37.5665, 126.9780], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap & CARTO'
+  }).addTo(map);
 
-    // 3) Cluster layer
-    const clusters = L.markerClusterGroup({
-      chunkedLoading:true, spiderfyOnMaxZoom:true, showCoverageOnHover:false, maxClusterRadius:55
-    }).addTo(map);
+  /* =========================================================
+     2) ICON MARKER — SVG xanh kiểu Subway (inline, không cần ảnh)
+     ========================================================= */
+  const svgIcon = (size=34) => {
+    const svg = encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 48 48'>
+        <circle cx='24' cy='24' r='22' fill='#1da64a' stroke='white' stroke-width='3'/>
+        <path d='M16 26h10l-4 6h6l8-10-8-10h-6l4 6H16z' fill='white'/>
+      </svg>
+    `);
+    return L.icon({
+      iconUrl: 'data:image/svg+xml;charset=UTF-8,' + svg,
+      iconSize: [size, size],
+      iconAnchor: [size/2, size - 4],
+      popupAnchor: [0, -size/2]
+    });
+  };
+  const markerIcon = svgIcon(36);
 
-    // 4) Helpers
-    const fmtAddr = (a) => !a ? '' : [a.road, a.jibeon ? '('+a.jibeon+')' : null].filter(Boolean).join(' ');
-    const notice = document.getElementById('notice');
-    function showNotice(msg){ notice.textContent = msg; notice.style.display = 'block'; }
+  /* =========================================================
+     3) NHÓM CỤM MARKER — hiển thị số lượng khi thu nhỏ
+     ========================================================= */
+  const clusters = L.markerClusterGroup({
+    chunkedLoading: true,         // tải dần marker để mượt hơn
+    spiderfyOnMaxZoom: true,      // bung cụm khi zoom đủ gần
+    showCoverageOnHover: false,   // tắt vùng phủ khi hover
+    maxClusterRadius: 55          // bán kính gom cụm
+  }).addTo(map);
 
-    // 5) Load JSON and render (expects subway_seoul.json in same folder)
-    async function loadAndRender(){
-      let stores = [];
-      try{
-        const res = await fetch('subway_seoul.json', { cache:'no-cache' });
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        stores = await res.json();
-      }catch(e){
-        showNotice('⚠️ "subway_seoul.json" 파일을 불러올 수 없습니다. HTML과 같은 폴더에 JSON을 두고 새로고침 해보세요.');
-        return;
-      }
+  /* =========================================================
+     4) TRỢ GIÚP — format địa chỉ / khóa cache
+     ========================================================= */
+  const status = document.getElementById('status');
 
-      const bounds = [];
-      for(const s of stores){
-        if(!s.geo || typeof s.geo.lat!=='number' || typeof s.geo.lng!=='number') continue;
-        const popup = `
-          <div style="font-size:14px;">
-            <div style="font-weight:700;margin-bottom:4px;">${s.name}</div>
-            <div>${fmtAddr(s.address)}</div>
-            ${s.phone ? `<div style="margin-top:4px;">☎ ${s.phone}</div>` : ''}
-          </div>
-        `;
-        const m = L.marker([s.geo.lat, s.geo.lng], { icon: markerIcon }).bindPopup(popup);
-        clusters.addLayer(m);
-        bounds.push([s.geo.lat, s.geo.lng]);
-      }
-      if(bounds.length) map.fitBounds(bounds, { padding:[40,40] });
-      else showNotice('ℹ️ JSON에 좌표(geo)가 없습니다. 지오코딩 후 사용하세요.');
+  // Gộp road + (jibeon) nếu có
+  const fmtAddr = (a) => !a ? '' : [a.road, a.jibeon ? '('+a.jibeon+')' : null].filter(Boolean).join(' ');
+
+  // Tạo key cache geocode theo tên + địa chỉ (tránh gọi lại)
+  function addrKey(s){
+    const base = fmtAddr(s.address) || (s.district ? `서울특별시 ${s.district}` : '');
+    return `subway_geo:${s.name}:${base}`;
+  }
+
+  /* =========================================================
+     5) GEOCODING — Nominatim + localStorage cache
+     ========================================================= */
+  async function geocodeWithCache(s){
+    const q = fmtAddr(s.address) || (s.district ? `서울특별시 ${s.district}` : '');
+    if(!q) return null;
+
+    const key = addrKey(s);
+    const cached = localStorage.getItem(key);
+    if(cached){
+      try { return JSON.parse(cached); } catch(e){}
     }
 
-    loadAndRender();
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', q);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('addressdetails', '0');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('countrycodes', 'kr');
 
-    // 6) Fit all
-    document.getElementById('fitAll').addEventListener('click', () => {
+    try {
+      const res = await fetch(url, { headers: { 'Accept-Language': 'ko', 'User-Agent': 'SeoulSubwayInline/1.0' } });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if(data && data.length > 0){
+        const gg = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        localStorage.setItem(key, JSON.stringify(gg));  // lưu cache
+        return gg;
+      }
+    } catch (e) {
+      console.warn('Geocode failed:', q, e);
+    }
+    return null;
+  }
+
+  /* =========================================================
+     6) VẼ MARKER — ưu tiên dùng geo có sẵn; thiếu thì geocode
+     ========================================================= */
+  (async function render(){
+    const bounds = [];
+    let done = 0;
+
+    for(const s of STORES){
+      status.textContent = `표시 중: ${++done}/${STORES.length}`;
+
+      // Nếu có sẵn tọa độ thì dùng luôn
+      let latlng = (s.geo && typeof s.geo.lat==='number' && typeof s.geo.lng==='number') ? s.geo : null;
+
+      // Nếu thiếu tọa độ, thử geocode (có cache)
+      if(!latlng){
+        latlng = await geocodeWithCache(s);
+        // Lịch sự với dịch vụ miễn phí: ~0.9s/req để tránh giới hạn
+        await new Promise(r => setTimeout(r, 900));
+      }
+
+      // Nếu vẫn không có tọa độ thì bỏ qua entry này
+      if(!latlng) continue;
+
+      // Nội dung popup: tên + địa chỉ (+ điện thoại nếu có)
+      const popup = `
+        <div style="font-size:14px;">
+          <div style="font-weight:700;margin-bottom:4px;">${s.name}</div>
+          <div>${fmtAddr(s.address)}</div>
+          ${s.phone ? `<div style="margin-top:4px;">☎ ${s.phone}</div>` : ''}
+        </div>
+      `;
+
+      // Tạo marker và thêm vào nhóm cụm
+      const m = L.marker([latlng.lat, latlng.lng], { icon: markerIcon }).bindPopup(popup);
+      clusters.addLayer(m);
+      bounds.push([latlng.lat, latlng.lng]);
+    }
+
+    // Fit bản đồ vào toàn bộ marker nếu có
+    if(bounds.length) {
+      map.fitBounds(bounds, { padding:[40,40] });
+      status.textContent = `완료: ${bounds.length}개 매장`;
+    } else {
+      status.textContent = '표시할 매장이 없습니다 (좌표가 필요합니다).';
+    }
+
+    // Nút "모두 보기" để fit lại
+    document.getElementById('fitAll').addEventListener('click', ()=>{
       const b = clusters.getBounds();
-      if (b.isValid()) map.fitBounds(b, { padding: [40, 40] });
+      if (b.isValid()) map.fitBounds(b, { padding:[40,40] });
     });
+
+    // Nút xóa cache geocode (khi bạn đổi địa chỉ hoặc muốn force geocode lại)
+    document.getElementById('clearCache').addEventListener('click', ()=>{
+      const keys = Object.keys(localStorage); let n=0;
+      for(const k of keys){ if(k.startsWith('subway_geo:')){ localStorage.removeItem(k); n++; } }
+      status.textContent = `지오코딩 캐시 삭제됨: ${n}개`;
+    });
+  })();
   </script>
 </body>
 </html>
