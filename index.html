@@ -2,29 +2,32 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Seoul Subway 매장 지도</title>
+
+  <!-- Leaflet & MarkerCluster CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
   <style>
-    html, body { height:100%; margin:0; background:#f6f7f9;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif; }
-    #map { height:100vh; width:100%; }
-    .topbar {
-      position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000;
-      background: rgba(255,255,255,0.95); border:1px solid #e5e7eb; border-radius:14px;
-      padding:8px 14px; box-shadow:0 4px 16px rgba(0,0,0,0.08);
+    html,body{height:100%;margin:0;background:#f6f7f9;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif}
+    #map{height:100vh;width:100%}
+    .topbar{
+      position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;
+      background:rgba(255,255,255,.95);border:1px solid #e5e7eb;border-radius:14px;
+      padding:8px 14px;box-shadow:0 4px 16px rgba(0,0,0,.08)
     }
-    .legend {
-      position: fixed; right: 12px; bottom: 12px; z-index: 1000;
-      background: rgba(255,255,255,0.94); border:1px solid #e5e7eb; border-radius:12px;
-      padding:10px 12px; font-size:12px;
+    .legend{
+      position:fixed;right:12px;bottom:12px;z-index:1000;
+      background:rgba(255,255,255,.94);border:1px solid #e5e7eb;border-radius:12px;
+      padding:8px 10px;font-size:12px
     }
-    .logo-swatch { width:18px; height:18px; border-radius:5px; background:#1da64a; display:inline-block; margin-right:6px; }
-    .btn {
-      position: fixed; top: 12px; right: 12px; z-index: 1000;
-      border: 1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer;
+    .logo-swatch{width:14px;height:14px;border-radius:4px;background:#1da64a;display:inline-block;margin-right:6px}
+    .btn{
+      position:fixed;top:12px;right:12px;z-index:1000;
+      border:1px solid #e5e7eb;background:#fff;padding:8px 12px;border-radius:10px;cursor:pointer
     }
   </style>
 </head>
@@ -32,21 +35,21 @@
   <div class="topbar"><b>Seoul Subway (샌드위치) 매장 지도</b></div>
   <button id="fitAll" class="btn">모두 보기</button>
   <div id="map"></div>
-  <div class="legend"><span class="logo-swatch"></span>Subway 매장 · Light gray basemap</div>
+  <div class="legend"><span class="logo-swatch"></span>Subway 매장 · CartoDB Positron</div>
 
+  <!-- Leaflet & MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script>
-    // ---- Cài đặt bản đồ (nền xám sáng) ----
-    const MAP_CENTER = [37.5665, 126.9780]; // Seoul City Hall
-    const map = L.map('map').setView(MAP_CENTER, 12);
 
+  <script>
+    // 1) Init map with light gray basemap (CartoDB Positron)
+    const map = L.map('map').setView([37.5665, 126.9780], 12);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap & CARTO'
     }).addTo(map);
 
-    // ---- Icon marker (SVG xanh kiểu Subway) ----
+    // 2) Custom Subway-like SVG marker icon (xanh)
     const svgIcon = (size=34) => {
       const svg = encodeURIComponent(`
         <svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 48 48'>
@@ -63,7 +66,7 @@
     };
     const markerIcon = svgIcon(36);
 
-    // ---- Cụm marker (cluster) ----
+    // 3) Marker cluster (gom cụm hiển số khi thu nhỏ)
     const clusters = L.markerClusterGroup({
       chunkedLoading: true,
       spiderfyOnMaxZoom: true,
@@ -71,7 +74,7 @@
       maxClusterRadius: 55
     }).addTo(map);
 
-    // ---- Helper hiển thị địa chỉ ----
+    // 4) Helper: format address text
     const fmtAddr = (a) => {
       if (!a) return '';
       const parts = [];
@@ -80,57 +83,29 @@
       return parts.join(' ');
     };
 
-    // ---- Geocoding nhẹ (Nominatim) cho entry thiếu tọa độ ----
-    async function geocode(address) {
-      if (!address) return null;
-      const url = new URL('https://nominatim.openstreetmap.org/search');
-      url.searchParams.set('q', address);
-      url.searchParams.set('format', 'json');
-      url.searchParams.set('addressdetails', '0');
-      url.searchParams.set('limit', '1');
-      url.searchParams.set('countrycodes', 'kr');
-      try {
-        const res = await fetch(url, { headers: { 'Accept-Language': 'ko', 'User-Agent': 'SeoulSubwayMap/1.0' } });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      } catch (e) {
-        console.warn('Geocode failed', address, e);
-      }
-      return null;
-    }
-
-    // ---- Load dữ liệu từ JSON cùng thư mục ----
+    // 5) Load data from JSON file placed next to this HTML
     async function loadAndRender() {
-      const resp = await fetch('subway_seoul.json'); // đặt cùng folder với file HTML
+      const resp = await fetch('data.json'); // đổi tên nếu file của bạn khác
       const stores = await resp.json();
+
       const bounds = [];
-
       for (const s of stores) {
-        let latlng = (s.geo && typeof s.geo.lat === 'number' && typeof s.geo.lng === 'number') ? s.geo : null;
+        // Chỉ vẽ marker khi có toạ độ geo
+        if (!s.geo || typeof s.geo.lat !== 'number' || typeof s.geo.lng !== 'number') continue;
 
-        // Nếu thiếu tọa độ thì thử geocode theo "road" (+ jibeon)
-        if (!latlng) {
-          const q = fmtAddr(s.address) || (s.district ? `서울특별시 ${s.district}` : '');
-          latlng = await geocode(q);
-          // giữ lịch sự: 1 giây/req để tránh spam API miễn phí
-          await new Promise(r => setTimeout(r, 900));
-        }
-
-        if (!latlng) continue;
-
-        const popup = `
+        const popupHtml = `
           <div style="font-size:14px;">
             <div style="font-weight:700;margin-bottom:4px;">${s.name}</div>
             <div>${fmtAddr(s.address)}</div>
-            ${s.phone ? `<div style="margin-top:4px;">☎ ${s.phone}</div>` : ''}
-            ${s.district ? `<div style="margin-top:4px;color:#64748b;">${s.district}</div>` : ''}
           </div>
         `;
 
-        const m = L.marker([latlng.lat, latlng.lng], { icon: markerIcon }).bindPopup(popup);
+        const m = L
+          .marker([s.geo.lat, s.geo.lng], { icon: markerIcon })
+          .bindPopup(popupHtml);
+
         clusters.addLayer(m);
-        bounds.push([latlng.lat, latlng.lng]);
+        bounds.push([s.geo.lat, s.geo.lng]);
       }
 
       if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
@@ -138,11 +113,10 @@
 
     loadAndRender();
 
-    // ---- Nút Fit All ----
+    // 6) Fit all button
     document.getElementById('fitAll').addEventListener('click', () => {
-      const groupBounds = clusters.getBounds();
-      if (groupBounds.isValid()) map.fitBounds(groupBounds, { padding: [40, 40] });
-      else map.setView(MAP_CENTER, 12);
+      const b = clusters.getBounds();
+      if (b.isValid()) map.fitBounds(b, { padding: [40, 40] });
     });
   </script>
 </body>
