@@ -1,16 +1,110 @@
-[
-  {
-    "name": "Subway Hongdae",
-    "address": "서울특별시 마포구 어딘가 123",
-    "lat": 37.557192,
-    "lng": 126.925381,
-    "gu": "마포구"
-  },
-  {
-    "name": "Subway Gangnam",
-    "address": "서울특별시 서초구 강남대로 000",
-    "lat": 37.497175,
-    "lng": 127.027926,
-    "gu": "서초구"
+
+/**
+ * Crawl Subway Korea mobile store-finder, filter Seoul-only,
+ * geocode with Kakao, and export subway_seoul.json
+ *
+ * Usage:
+ *   npm i puppeteer axios
+ *   KAKAO_REST_KEY=YOUR_KEY node crawl_subway_seoul.js
+ *
+ * Output:
+ *   subway_seoul.json  (array of {name,address,lat,lng,gu})
+ */
+import fs from 'fs/promises';
+import axios from 'axios';
+import puppeteer from 'puppeteer';
+
+const LIST_URL = 'https://m.subway.co.kr/more/findStore/list';
+const OUTFILE  = 'subway_seoul.json';
+const KAKAO_KEY = process.env.KAKAO_REST_KEY; // https://developers.kakao.com/
+const GEOCODE_URL = 'https://dapi.kakao.com/v2/local/search/address.json';
+
+// Regex nhận diện Seoul
+const SEOUL_TOKEN = /서울특별시|Seoul/i;
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function geocode(address){
+  if(!KAKAO_KEY) return null;
+  try{
+    const res = await axios.get(GEOCODE_URL, {
+      params: { query: address },
+      headers: { Authorization: `KakaoAK ${KAKAO_KEY}` },
+      timeout: 15000
+    });
+    const doc = res.data?.documents?.[0];
+    if(!doc) return null;
+    return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
+  }catch(e){
+    console.warn('Geocode fail:', address, e.message);
+    return null;
   }
-]
+}
+
+async function crawl(){
+  const browser = await puppeteer.launch({
+    headless: true,
+    defaultViewport: { width: 420, height: 900 },
+    args: ['--no-sandbox','--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.goto(LIST_URL, { waitUntil: 'domcontentloaded' });
+
+  // Try reveal entire list by scrolling repeatedly
+  let unchanged = 0;
+  for(let i=0;i<60;i++){
+    const before = await page.$$eval('body *', els => els.length);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await sleep(800);
+    const after = await page.$$eval('body *', els => els.length);
+    if(after <= before){ unchanged++; if(unchanged>=3) break; } else { unchanged = 0; }
+  }
+
+  // Extract potential (name,address) pairs; heuristic: address contains 서울특별시; name near above
+  const raw = await page.$$eval('body *', nodes => {
+    const texts = nodes.map(n => (n.innerText||'').trim()).filter(Boolean);
+    const rows = [];
+    for(let i=1;i<texts.length;i++){
+      const t = texts[i];
+      if(/서울특별시/.test(t)){
+        const name = texts[i-1] || '';
+        const addr = t;
+        if(name && addr.length>6) rows.push({ name, address: addr });
+      }
+    }
+    const uniq = new Map();
+    rows.forEach(r => uniq.set(`${r.name}__${r.address}`, r));
+    return Array.from(uniq.values());
+  });
+
+  await browser.close();
+
+  const seoul = raw.filter(it => SEOUL_TOKEN.test(it.address));
+  const out = [];
+  for(const it of seoul){
+    const geo = await geocode(it.address);
+    const guMatch = it.address.match(/(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구)/);
+    out.push({
+      name: it.name,
+      address: it.address,
+      lat: geo?.lat || null,
+      lng: geo?.lng || null,
+      gu: guMatch ? guMatch[1] : ''
+    });
+  }
+
+  // Retry geocoding with simplified address if needed
+  if(process.env.KAKAO_REST_KEY){
+    for(const it of out){
+      if(it.lat && it.lng) continue;
+      const lite = it.address.replace(/\d+층.*$/,'').replace(/\s{2,}/g,' ').trim();
+      const geo2 = await geocode(lite);
+      if(geo2){ it.lat = geo2.lat; it.lng = geo2.lng; }
+    }
+  }
+
+  await fs.writeFile(OUTFILE, JSON.stringify(out, null, 2), 'utf-8');
+  console.log(`Saved ${out.length} Seoul Subway stores to ${OUTFILE}`);
+}
+
+crawl().catch(err => { console.error(err); process.exit(1); });
