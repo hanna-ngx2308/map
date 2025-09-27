@@ -1,57 +1,268 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Subway Sandwich 매장 지도 · Seoul</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <meta charset="utf-8" />
+  <title>서울 SUBWAY 매장 지도</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
   <style>
-    html,body{height:100%;margin:0}
-    #map{height:100vh;width:100%}
-    .leaflet-popup-content{font-size:14px;line-height:1.5}
+    :root {
+      --bg: #f4f5f6;
+      --card: #ffffff;
+      --border: #e8eaed;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #009943; /* Subway green 느낌 */
+    }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
+    #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header {
+      padding: 10px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .title {
+      font-weight: 700; letter-spacing: .2px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .title .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .controls input, .controls select, .controls button {
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .controls button {
+      cursor: pointer; font-weight: 600;
+    }
+    #map { width: 100%; height: 100%; }
+    .legend {
+      position: absolute; right: 12px; bottom: 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      display:flex; align-items:center; gap:8px;
+    }
+    .legend img { width: 18px; height: 18px; display:block; }
+    .popup h3 {
+      margin: 0 0 6px; font-size: 16px;
+      display:flex; align-items:center; gap:6px;
+    }
+    .badge {
+      display:inline-block; background: #e8f7ee; color:#066e33;
+      font-size:11px; padding:2px 6px; border-radius: 999px;
+      border:1px solid #c7ead6;
+    }
+    .popup p { margin: 0 0 6px; font-size: 13px; color:#374151; }
+    .popup a { color: var(--accent); text-decoration: none; }
+    .popup .muted { color: #6b7280; font-size: 12px; }
+    /* 작은 화면에서 컨트롤 줄바꿈 */
+    @media (max-width: 640px) {
+      header { grid-template-columns: 1fr; }
+      .controls { justify-content: space-between; }
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div id="app">
+    <header>
+      <div class="title">
+        <span class="dot"></span>
+        <span>서울 SUBWAY 매장 지도</span>
+      </div>
+      <div class="controls">
+        <input id="q" type="search" placeholder="매장명 또는 주소 검색 (예: 강남, 홍대)" />
+        <select id="gu">
+          <option value="">전체 구</option>
+          <option>강남구</option><option>강동구</option><option>강북구</option><option>강서구</option>
+          <option>관악구</option><option>광진구</option><option>구로구</option><option>금천구</option>
+          <option>노원구</option><option>도봉구</option><option>동대문구</option><option>동작구</option>
+          <option>마포구</option><option>서대문구</option><option>서초구</option><option>성동구</option>
+          <option>성북구</option><option>송파구</option><option>양천구</option><option>영등포구</option>
+          <option>용산구</option><option>은평구</option><option>종로구</option><option>중구</option>
+          <option>중랑구</option>
+        </select>
+        <button id="apply">필터 적용</button>
+        <button id="reset">초기화</button>
+      </div>
+    </header>
+    <div id="map"></div>
+  </div>
+
+  <!-- 로고 아이콘: 내장 SVG(Data URI) -->
   <script>
-    // Khởi tạo bản đồ
-    const map=L.map('map').setView([37.5665,126.9780],12);
+    // 심플한 Subway S 로고 느낌의 초록 원형 SVG (용량 작아서 로컬 파일 불필요)
+    const SUBWAY_ICON_DATAURI =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
+          <defs>
+            <filter id="shadow"><feDropShadow dx="0" dy="1.2" stdDeviation="1.4" flood-opacity=".2"/></filter>
+          </defs>
+          <g filter="url(#shadow)">
+            <circle cx="36" cy="36" r="30" fill="#009943"/>
+            <path d="M24 38c0-5.523 7.163-7 12-7h4v-4l8 6-8 6v-4h-4c-3.866 0-8 1.134-8 3 0 2.209 3.582 3 8 3h8v6h-8c-8.837 0-12-4.477-12-9z" fill="#fff"/>
+          </g>
+        </svg>
+      `);
 
-    // Nền xám sáng (Carto Light)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
+    // Leaflet 초기화 (서울 중심)
+    const map = L.map('map', {
+      zoomControl: true
+    }).setView([37.5665, 126.9780], 12);
 
-    // Icon Subway màu xanh
-    const SubwayIcon=L.DivIcon.extend({options:{className:'',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-14]}});
-    const iconHtml = `<div style="width:30px;height:30px;border-radius:50%;background:#008938;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2)">S</div>`;
+    // 밝은 회색 타일(포지트론)
+    L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }
+    ).addTo(map);
 
-    // Đọc dữ liệu subway_seoul.json
-    fetch('subway_seoul.json',{cache:'no-store'})
-      .then(r=>r.json())
-      .then(rows=>{
-        const bounds=[];
-        rows.forEach(s=>{
-          if(!isFinite(s.lat)||!isFinite(s.lng)) return;
-          const m=L.marker([+s.lat,+s.lng],{icon:new SubwayIcon({html:iconHtml})})
-            .bindPopup(`<b>${escapeHTML(s.name||'Subway')}</b><br>${escapeHTML(s.address||'')}${s.gu?('<br>'+escapeHTML(s.gu)):""}`)
-            .addTo(map);
-          bounds.push([+s.lat,+s.lng]);
-        });
-        if(bounds.length) map.fitBounds(bounds,{padding:[30,30]});
-      })
-      .catch(err=>{
-        console.error(err);
-        alert('Không đọc được subway_seoul.json. Hãy chạy crawler để tạo file.');
+    // 커스텀 아이콘
+    const subwayIcon = L.icon({
+      iconUrl: SUBWAY_ICON_DATAURI,
+      iconSize: [34, 34],
+      iconAnchor: [17, 33],
+      popupAnchor: [0, -28],
+      className: 'subway-marker'
+    });
+
+    // 전역 상태
+    let allMarkers = [];     // L.Marker 목록
+    let allData = [];        // JSON 원본
+    const layerGroup = L.layerGroup().addTo(map);
+
+    // 유틸: 텍스트 정규화
+    const norm = (s) => (s || '').toString().replace(/\s+/g,' ').trim();
+
+    // 팝업 HTML
+    function popupHtml(row) {
+      const name = norm(row.name);
+      const road = norm(row.address?.road);
+      const jibeon = norm(row.address?.jibeon);
+      const gu = norm(row.district);
+      const phone = norm(row.phone);
+      return `
+        <div class="popup">
+          <h3>${name} <span class="badge">SUBWAY</span></h3>
+          <p><strong>주소(도로명)</strong> : ${road || '-'}</p>
+          ${jibeon ? `<p><strong>지번</strong> : ${jibeon}</p>` : ``}
+          ${gu ? `<p class="muted">행정구 : ${gu}</p>` : ``}
+          ${phone ? `<p>연락처 : <a href="tel:${phone.replace(/[^0-9]/g,'')}" target="_blank" rel="noreferrer">${phone}</a></p>` : ``}
+          <p><a href="https://m.subway.co.kr/more/findStore/list" target="_blank" rel="noreferrer">공식 매장 목록 열기</a></p>
+        </div>
+      `;
+    }
+
+    // 마커 생성
+    function createMarkers(rows) {
+      layerGroup.clearLayers();
+      allMarkers = [];
+      const bounds = [];
+
+      rows.forEach(row => {
+        const lat = row?.geo?.lat, lng = row?.geo?.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') return; // 좌표 없는 항목 스킵
+
+        const m = L.marker([lat, lng], { icon: subwayIcon })
+          .bindPopup(popupHtml(row), { maxWidth: 320 });
+
+        allMarkers.push(m);
+        layerGroup.addLayer(m);
+        bounds.push([lat, lng]);
       });
 
-    // Hàm escape text an toàn
-    function escapeHTML(s=''){
-      return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      if (bounds.length) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }
     }
+
+    // 필터 적용
+    function applyFilter() {
+      const qVal = norm(document.getElementById('q').value).toLowerCase();
+      const guVal = norm(document.getElementById('gu').value);
+
+      const filtered = allData.filter(row => {
+        const hay = [
+          norm(row.name),
+          norm(row.address?.road),
+          norm(row.address?.jibeon),
+          norm(row.district)
+        ].join(' ').toLowerCase();
+
+        const matchQ = qVal ? hay.includes(qVal) : true;
+        const matchGu = guVal ? norm(row.district) === guVal : true;
+
+        return matchQ && matchGu;
+      });
+
+      createMarkers(filtered);
+    }
+
+    // 초기화
+    function resetFilter() {
+      document.getElementById('q').value = '';
+      document.getElementById('gu').value = '';
+      createMarkers(allData);
+    }
+
+    document.getElementById('apply').addEventListener('click', applyFilter);
+    document.getElementById('reset').addEventListener('click', resetFilter);
+    document.getElementById('q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') applyFilter();
+    });
+
+    // 데이터 로드
+    fetch('seoul_subway.json')
+      .then(r => r.json())
+      .then(json => {
+        // 서울 아닌 데이터가 섞였을 경우 방어
+        allData = (Array.isArray(json) ? json : []).filter(r => {
+          const addr = norm(r.address?.road);
+          return /서울특별시/.test(addr) || /서울\s?/.test(addr) || norm(r.district).endsWith('구');
+        });
+
+        createMarkers(allData);
+      })
+      .catch(err => {
+        console.error('JSON 로드 오류:', err);
+        alert('seoul_subway.json을 찾을 수 없습니다. 같은 폴더에 파일이 있는지 확인해주세요.');
+      });
+
+    // 간단한 범례
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function () {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = `
+        <img src="${SUBWAY_ICON_DATAURI}" alt="Subway icon" />
+        <span>SUBWAY 매장</span>
+      `;
+      return div;
+    };
+    legend.addTo(map);
   </script>
 </body>
 </html>
