@@ -23,7 +23,7 @@
       --border: #e8eaed;
       --text: #111827;
       --muted: #6b7280;
-      --accent: #009943; /* Subway green 느낌 */
+      --accent: #009943; /* Subway green */
     }
     html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
     #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
@@ -49,9 +49,7 @@
       border-radius: 10px;
       font-size: 14px;
     }
-    .controls button {
-      cursor: pointer; font-weight: 600;
-    }
+    .controls button { cursor: pointer; font-weight: 600; }
     #map { width: 100%; height: 100%; }
     .legend {
       position: absolute; right: 12px; bottom: 14px;
@@ -76,7 +74,6 @@
     .popup p { margin: 0 0 6px; font-size: 13px; color:#374151; }
     .popup a { color: var(--accent); text-decoration: none; }
     .popup .muted { color: #6b7280; font-size: 12px; }
-    /* 작은 화면에서 컨트롤 줄바꿈 */
     @media (max-width: 640px) {
       header { grid-template-columns: 1fr; }
       .controls { justify-content: space-between; }
@@ -109,39 +106,28 @@
     <div id="map"></div>
   </div>
 
-  <!-- 로고 아이콘: 내장 SVG(Data URI) -->
+  <!-- Subway-like SVG icon as inline data URI -->
   <script>
-    // 심플한 Subway S 로고 느낌의 초록 원형 SVG (용량 작아서 로컬 파일 불필요)
-    const SUBWAY_ICON_DATAURI =
-      'data:image/svg+xml;utf8,' +
-      encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
-          <defs>
-            <filter id="shadow"><feDropShadow dx="0" dy="1.2" stdDeviation="1.4" flood-opacity=".2"/></filter>
-          </defs>
-          <g filter="url(#shadow)">
-            <circle cx="36" cy="36" r="30" fill="#009943"/>
-            <path d="M24 38c0-5.523 7.163-7 12-7h4v-4l8 6-8 6v-4h-4c-3.866 0-8 1.134-8 3 0 2.209 3.582 3 8 3h8v6h-8c-8.837 0-12-4.477-12-9z" fill="#fff"/>
-          </g>
-        </svg>
-      `);
+    const SUBWAY_ICON_DATAURI = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
+        <defs><filter id="shadow"><feDropShadow dx="0" dy="1.2" stdDeviation="1.4" flood-opacity=".2"/></filter></defs>
+        <g filter="url(#shadow)">
+          <circle cx="36" cy="36" r="30" fill="#009943"/>
+          <path d="M24 38c0-5.523 7.163-7 12-7h4v-4l8 6-8 6v-4h-4c-3.866 0-8 1.134-8 3 0 2.209 3.582 3 8 3h8v6h-8c-8.837 0-12-4.477-12-9z" fill="#fff"/>
+        </g>
+      </svg>
+    `);
 
-    // Leaflet 초기화 (서울 중심)
-    const map = L.map('map', {
-      zoomControl: true
-    }).setView([37.5665, 126.9780], 12);
+    // Initialize map centered on Seoul
+    const map = L.map('map', { zoomControl: true }).setView([37.5665, 126.9780], 12);
 
-    // 밝은 회색 타일(포지트론)
-    L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      }
-    ).addTo(map);
+    // Light gray basemap (Carto Positron)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }).addTo(map);
 
-    // 커스텀 아이콘
+    // Custom icon
     const subwayIcon = L.icon({
       iconUrl: SUBWAY_ICON_DATAURI,
       iconSize: [34, 34],
@@ -150,15 +136,12 @@
       className: 'subway-marker'
     });
 
-    // 전역 상태
-    let allMarkers = [];     // L.Marker 목록
-    let allData = [];        // JSON 원본
+    let allData = [];
+    let allMarkers = [];
     const layerGroup = L.layerGroup().addTo(map);
 
-    // 유틸: 텍스트 정규화
-    const norm = (s) => (s || '').toString().replace(/\s+/g,' ').trim();
+    const norm = (s) => (s || '').toString().replace(/\s+/g, ' ').trim();
 
-    // 팝업 HTML
     function popupHtml(row) {
       const name = norm(row.name);
       const road = norm(row.address?.road);
@@ -169,15 +152,14 @@
         <div class="popup">
           <h3>${name} <span class="badge">SUBWAY</span></h3>
           <p><strong>주소(도로명)</strong> : ${road || '-'}</p>
-          ${jibeon ? `<p><strong>지번</strong> : ${jibeon}</p>` : ``}
-          ${gu ? `<p class="muted">행정구 : ${gu}</p>` : ``}
-          ${phone ? `<p>연락처 : <a href="tel:${phone.replace(/[^0-9]/g,'')}" target="_blank" rel="noreferrer">${phone}</a></p>` : ``}
+          ${jibeon ? `<p><strong>지번</strong> : ${jibeon}</p>` : ''}
+          ${gu ? `<p class="muted">행정구 : ${gu}</p>` : ''}
+          ${phone ? `<p>연락처 : <a href="tel:${phone.replace(/[^0-9]/g,'')}" target="_blank" rel="noreferrer">${phone}</a></p>` : ''}
           <p><a href="https://m.subway.co.kr/more/findStore/list" target="_blank" rel="noreferrer">공식 매장 목록 열기</a></p>
         </div>
       `;
     }
 
-    // 마커 생성
     function createMarkers(rows) {
       layerGroup.clearLayers();
       allMarkers = [];
@@ -185,22 +167,17 @@
 
       rows.forEach(row => {
         const lat = row?.geo?.lat, lng = row?.geo?.lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return; // 좌표 없는 항목 스킵
-
-        const m = L.marker([lat, lng], { icon: subwayIcon })
+        if (typeof lat !== 'number' || typeof lng !== 'number') return; // skip rows without coords
+        const marker = L.marker([lat, lng], { icon: subwayIcon })
           .bindPopup(popupHtml(row), { maxWidth: 320 });
-
-        allMarkers.push(m);
-        layerGroup.addLayer(m);
+        allMarkers.push(marker);
+        layerGroup.addLayer(marker);
         bounds.push([lat, lng]);
       });
 
-      if (bounds.length) {
-        map.fitBounds(bounds, { padding: [30, 30] });
-      }
+      if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
     }
 
-    // 필터 적용
     function applyFilter() {
       const qVal = norm(document.getElementById('q').value).toLowerCase();
       const guVal = norm(document.getElementById('gu').value);
@@ -212,17 +189,14 @@
           norm(row.address?.jibeon),
           norm(row.district)
         ].join(' ').toLowerCase();
-
         const matchQ = qVal ? hay.includes(qVal) : true;
         const matchGu = guVal ? norm(row.district) === guVal : true;
-
         return matchQ && matchGu;
       });
 
       createMarkers(filtered);
     }
 
-    // 초기화
     function resetFilter() {
       document.getElementById('q').value = '';
       document.getElementById('gu').value = '';
@@ -231,20 +205,18 @@
 
     document.getElementById('apply').addEventListener('click', applyFilter);
     document.getElementById('reset').addEventListener('click', resetFilter);
-    document.getElementById('q').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') applyFilter();
-    });
+    document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilter(); });
 
-    // 데이터 로드
+    // Load your JSON file (must be in the same folder)
     fetch('seoul_subway.json')
       .then(r => r.json())
       .then(json => {
-        // 서울 아닌 데이터가 섞였을 경우 방어
-        allData = (Array.isArray(json) ? json : []).filter(r => {
+        allData = Array.isArray(json) ? json : [];
+        // Keep only Seoul-ish entries (defensive)
+        allData = allData.filter(r => {
           const addr = norm(r.address?.road);
           return /서울특별시/.test(addr) || /서울\s?/.test(addr) || norm(r.district).endsWith('구');
         });
-
         createMarkers(allData);
       })
       .catch(err => {
@@ -252,14 +224,11 @@
         alert('seoul_subway.json을 찾을 수 없습니다. 같은 폴더에 파일이 있는지 확인해주세요.');
       });
 
-    // 간단한 범례
+    // Legend control
     const legend = L.control({ position: 'bottomright' });
     legend.onAdd = function () {
       const div = L.DomUtil.create('div', 'legend');
-      div.innerHTML = `
-        <img src="${SUBWAY_ICON_DATAURI}" alt="Subway icon" />
-        <span>SUBWAY 매장</span>
-      `;
+      div.innerHTML = `<img src="${SUBWAY_ICON_DATAURI}" alt="Subway icon" /> <span>SUBWAY 매장</span>`;
       return div;
     };
     legend.addTo(map);
