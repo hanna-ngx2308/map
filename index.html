@@ -1,86 +1,303 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>올리브영 매장 지도 (서울)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Subway Sandwich 매장 지도 · Seoul</title>
 
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <!-- MarkerCluster (như subway mobile sẽ gom điểm đông) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100vh; width: 100%; }
-    .leaflet-popup-content { font-size: 14px; line-height: 1.5; }
-    .brand {
-      position: absolute; left: 12px; top: 12px; z-index: 1000;
-      background: rgba(255,255,255,.92); padding: 8px 12px; border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08); font-weight: 600;
+    :root{
+      --brand:#008938; /* Subway green */
+      --brand-2:#ffcc00; /* Subway yellow */
+      --bg:#f7f7f8; --card:#fff; --muted:#6b7280; --border:#e5e7eb;
     }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"}
+    .app{display:grid;grid-template-columns:360px 1fr;height:100vh}
+    @media (max-width: 960px){ .app{grid-template-columns:1fr;height:auto} }
+    header{
+      grid-column:1/-1; display:flex; gap:10px; align-items:center;
+      padding:10px 12px; background:#fff; border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:30;
+    }
+    .brand{display:flex; align-items:center; gap:10px; font-weight:800; color:var(--brand)}
+    .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand)}
+    .grow{flex:1}
+    .controls{display:flex; gap:8px; width:100%}
+    .input, select{
+      width:100%; padding:10px 12px; border:1px solid var(--border);
+      border-radius:12px; background:#fff; font-size:14px;
+    }
+    button{
+      border:none; background:var(--brand); color:#fff; padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer;
+    }
+    button.secondary{background:#111}
+    button.link{background:transparent;color:var(--brand);padding:8px 10px}
+    .layout{display:grid;grid-template-columns:360px 1fr; height:calc(100vh - 58px)}
+    @media (max-width: 960px){
+      .layout{grid-template-columns:1fr; height:auto}
+    }
+    aside{
+      background:#fff; border-right:1px solid var(--border); overflow:auto;
+    }
+    .panel-head{
+      padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);
+    }
+    .count{font-weight:700}
+    .list{padding:8px}
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; margin:8px 0;
+      display:grid; gap:6px; cursor:pointer; transition: box-shadow .15s ease;
+    }
+    .card:hover{box-shadow:0 4px 20px rgba(0,0,0,.06)}
+    .title{font-weight:800}
+    .addr{color:var(--muted); font-size:13px}
+    .tags{display:flex; gap:6px; flex-wrap:wrap}
+    .tag{font-size:11px; background:#f1f5f9; border:1px solid var(--border); padding:3px 8px; border-radius:999px}
+    .active{outline:2px solid var(--brand-2)}
+    #map{height:100%; width:100%}
+    @media (max-width: 960px){
+      aside{order:2;max-height:48vh}
+      #map{order:1; height:50vh}
+      .layout{display:flex; flex-direction:column}
+    }
+    .floating{
+      position:absolute; left:12px; top:72px; z-index:400; background:rgba(255,255,255,.9);
+      padding:8px 10px; border-radius:12px; border:1px solid var(--border);
+      box-shadow:0 2px 10px rgba(0,0,0,.08); display:flex; gap:6px; align-items:center;
+    }
+    .legend{position:absolute; right:12px; bottom:12px; z-index:400; background:rgba(255,255,255,.95); padding:8px 10px; border-radius:10px; border:1px solid var(--border); font-size:12px}
+    .legend b{color:#111}
+    .leaflet-popup-content{font-size:14px; line-height:1.5}
+    .cluster-custom{background:var(--brand); color:#fff; border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,.15); font-weight:800}
   </style>
 </head>
 <body>
-  <div class="brand">올리브영 매장 지도 · 서울</div>
-  <div id="map"></div>
+  <header>
+    <div class="brand"><span class="dot"></span> Subway Sandwich · Seoul</div>
+    <div class="grow controls">
+      <input id="q" class="input" placeholder="검색 / Search cửa hàng, địa chỉ…" />
+      <select id="gu" title="District">
+        <option value="">모든 구 (All)</option>
+        <!-- Bạn có thể rút gọn/điều chỉnh danh sách quận -->
+        <option>강남구</option><option>강동구</option><option>강북구</option><option>강서구</option>
+        <option>관악구</option><option>광진구</option><option>구로구</option><option>금천구</option>
+        <option>노원구</option><option>도봉구</option><option>동대문구</option><option>동작구</option>
+        <option>마포구</option><option>서대문구</option><option>서초구</option><option>성동구</option>
+        <option>성북구</option><option>송파구</option><option>양천구</option><option>영등포구</option>
+        <option>용산구</option><option>은평구</option><option>종로구</option><option>중구</option><option>중랑구</option>
+      </select>
+      <button id="btnSearch">Tìm</button>
+    </div>
+    <button id="toggleList" class="link" aria-label="Toggle list on mobile">Danh sách ⬇</button>
+  </header>
 
-  <!-- Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <div class="layout">
+    <aside id="side">
+      <div class="panel-head">
+        <div class="count"><span id="resultCount">0</span> kết quả</div>
+        <button id="btnReset" class="secondary">Reset</button>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+
+    <div style="position:relative">
+      <div class="floating">
+        <button id="btnLocate" title="Định vị gần tôi">📍 Gần tôi</button>
+        <button id="btnFit" title="Fit tất cả kết quả">🗺️ Fit</button>
+      </div>
+      <div id="map"></div>
+      <div class="legend"><b>Gợi ý:</b> Nhập “Gangnam” hay “강남구” để lọc theo quận; click card để nhảy tới marker.</div>
+    </div>
+  </div>
+
+  <!-- JS libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // 1) Dữ liệu JSON nhúng trực tiếp
-    const oliveyoungStores = [
-      {"name":"올리브영 명동 타운 (Myeongdong Global)","address":"서울특별시 중구 명동길 53 1–2층","lat":37.5649,"lng":126.9855},
-      {"name":"올리브영 시청역점","address":"서울특별시 중구 세종대로16길 1 1층","lat":37.5658,"lng":126.9753},
-      {"name":"올리브영 명동역점","address":"서울특별시 중구 퇴계로 127 1층","lat":37.5610,"lng":126.9862},
-      {"name":"올리브영 종로YBM점","address":"서울특별시 종로구 종로 104","lat":37.5699,"lng":126.9865},
-      {"name":"올리브영 성수역점","address":"서울특별시 성동구 아차산로 91","lat":37.5445,"lng":127.0564},
-      {"name":"올리브영 삼성점","address":"서울특별시 강남구 테헤란로108길 22","lat":37.5088,"lng":127.0616},
-      {"name":"올리브영 청담사거리점","address":"서울특별시 강남구 도산대로89길 8","lat":37.5247,"lng":127.0415},
-      {"name":"올리브영 남역삼점","address":"서울특별시 강남구 논현로 318","lat":37.4968,"lng":127.0319},
-      {"name":"올리브영 석촌호수로점","address":"서울특별시 송파구 석촌호수로 88 1층","lat":37.5065,"lng":127.1069},
-      {"name":"올리브영 구파발역점","address":"서울특별시 은평구 진관2로 12","lat":37.6368,"lng":126.9188},
-      {"name":"올리브영 경희대점","address":"서울특별시 동대문구 경희대로 2","lat":37.5946,"lng":127.0525},
-      {"name":"올리브영 광운대역점","address":"서울특별시 노원구 석계로 102 1층 2호","lat":37.6230,"lng":127.0618},
-      {"name":"올리브영 녹두거리점","address":"서울특별시 관악구 신림로 127 1층","lat":37.4826,"lng":126.9309},
-      {"name":"올리브영 문래점","address":"서울특별시 영등포구 선유로 63 1층","lat":37.5172,"lng":126.8950},
-      {"name":"올리브영 길동역점","address":"서울특별시 강동구 양재대로 1481 1층","lat":37.5352,"lng":127.1427}
+    // ====== 1) DỮ LIỆU: ưu tiên fetch subway_seoul.json, fallback data mẫu ======
+    const fallbackData = [
+      {"name":"Subway Hongdae","address":"486 Seogyo-dong, Mapo-gu, Seoul","lat":37.557192,"lng":126.925381,"gu":"마포구"},
+      {"name":"Subway Toegye-ro","address":"204 Toegye-ro, Jung-gu, Seoul","lat":37.5630,"lng":126.9865,"gu":"중구"},
+      {"name":"Subway Gangnam Station","address":"Gangnam-daero, Seocho-gu, Seoul","lat":37.497175,"lng":127.027926,"gu":"서초구"},
+      {"name":"Subway Yeouido","address":"Yeouido-dong, Yeongdeungpo-gu, Seoul","lat":37.521624,"lng":126.924191,"gu":"영등포구"},
+      {"name":"Subway Jamsil","address":"Songpa-gu, Seoul","lat":37.51395,"lng":127.102234,"gu":"송파구"}
     ];
 
-    // 2) Khởi tạo bản đồ
-    const map = L.map('map').setView([37.5665, 126.9780], 11);
+    async function loadData(){
+      try{
+        const res = await fetch('subway_seoul.json', { cache:'no-store' });
+        if(!res.ok) throw new Error('no file');
+        const data = await res.json();
+        // Chuẩn hoá: yêu cầu có name, address, lat, lng, (tuỳ chọn) gu
+        return data.map(d => ({
+          name: d.name, address: d.address, lat: +d.lat, lng: +d.lng,
+          gu: d.gu || guessGu(d.address)
+        })).filter(d => isFinite(d.lat) && isFinite(d.lng));
+      }catch(e){
+        return fallbackData;
+      }
+    }
 
-    // 3) Nền bản đồ OSM
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+    function guessGu(addr=""){
+      // Đoán quận từ chuỗi địa chỉ (rất đơn giản; bạn có thể thay bằng mapping chuẩn)
+      const gus = ["강남구","강동구","강북구","강서구","관악구","광진구","구로구","금천구","노원구","도봉구","동대문구","동작구","마포구","서대문구","서초구","성동구","성북구","송파구","양천구","영등포구","용산구","은평구","종로구","중구","중랑구"];
+      const found = gus.find(g => addr.includes(g));
+      return found || "";
+    }
+
+    // ====== 2) MAP ======
+    const map = L.map('map', { zoomControl:true }).setView([37.5665,126.9780], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // 4) Icon logo
-    const oliveIcon = L.icon({
-      iconUrl: 'oliveyoung_logo.png', // đặt file logo này cùng thư mục
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
-      popupAnchor: [0, -18]
+    // Icon logo (dùng divIcon cho nhanh; nếu có file logo, đổi thành L.icon)
+    const LogoIcon = L.DivIcon.extend({
+      options:{
+        className:'', iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-16]
+      }
+    });
+    function makeLogoIcon(){
+      // màu nền xanh Subway + chữ S đơn giản (có thể thay bằng <img src="subway_logo.svg">)
+      const html = `
+        <div style="width:36px;height:36px;border-radius:50%;
+          background:var(--brand);display:flex;align-items:center;justify-content:center;
+          color:#fff;font-weight:900;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+          S
+        </div>`;
+      return new LogoIcon({ html });
+    }
+
+    // Cluster
+    const cluster = L.markerClusterGroup({
+      iconCreateFunction: cluster => {
+        return L.divIcon({
+          html:`<div class="cluster-custom">${cluster.getChildCount()}</div>`,
+          className:'', iconSize:[36,36]
+        });
+      }
+    });
+    map.addLayer(cluster);
+
+    // ====== 3) STATE & RENDER ======
+    let RAW = [];        // toàn bộ điểm
+    let markers = [];    // mảng marker đang hiển thị
+
+    const els = {
+      q: document.getElementById('q'),
+      gu: document.getElementById('gu'),
+      btnSearch: document.getElementById('btnSearch'),
+      btnReset: document.getElementById('btnReset'),
+      list: document.getElementById('list'),
+      count: document.getElementById('resultCount'),
+      btnLocate: document.getElementById('btnLocate'),
+      btnFit: document.getElementById('btnFit'),
+      toggleList: document.getElementById('toggleList'),
+      side: document.getElementById('side')
+    };
+
+    function filterData(){
+      const q = els.q.value.trim().toLowerCase();
+      const gu = els.gu.value.trim();
+      return RAW.filter(d => {
+        const hitQ = !q || d.name.toLowerCase().includes(q) || d.address.toLowerCase().includes(q);
+        const hitGu = !gu || d.gu === gu;
+        return hitQ && hitGu;
+      });
+    }
+
+    function clearMarkers(){
+      markers.forEach(m => cluster.removeLayer(m));
+      markers = [];
+    }
+
+    function renderList(rows){
+      els.list.innerHTML = rows.map((d,i)=>`
+        <div class="card" data-idx="${i}">
+          <div class="title">${escapeHTML(d.name)}</div>
+          <div class="addr">${escapeHTML(d.address)}</div>
+          ${d.gu ? `<div class="tags"><span class="tag">${d.gu}</span></div>`:''}
+        </div>
+      `).join('');
+      els.count.textContent = rows.length.toString();
+
+      // click card → fly to marker
+      Array.from(els.list.querySelectorAll('.card')).forEach((card,i)=>{
+        card.addEventListener('click',()=>{
+          const m = markers[i];
+          if(!m) return;
+          map.flyTo(m.getLatLng(), 16, { duration:.6 });
+          m.openPopup();
+          highlightCard(i);
+        });
+      });
+    }
+
+    function renderMarkers(rows){
+      clearMarkers();
+      const bounds = [];
+      rows.forEach((d,i)=>{
+        const m = L.marker([d.lat,d.lng], { icon: makeLogoIcon() })
+          .bindPopup(`<b>${escapeHTML(d.name)}</b><br>${escapeHTML(d.address)}`);
+        m.on('click', ()=> highlightCard(i));
+        cluster.addLayer(m);
+        markers.push(m);
+        bounds.push([d.lat,d.lng]);
+      });
+      if(bounds.length) map.fitBounds(bounds, { padding:[30,30] });
+    }
+
+    function highlightCard(i){
+      Array.from(els.list.children).forEach((el,idx)=>{
+        el.classList.toggle('active', idx===i);
+        if(idx===i) el.scrollIntoView({block:'center', behavior:'smooth'});
+      });
+    }
+
+    function escapeHTML(s=''){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    async function boot(){
+      RAW = await loadData();
+      const rows = filterData();
+      renderList(rows);
+      renderMarkers(rows);
+    }
+
+    // ====== 4) EVENTS ======
+    els.btnSearch.addEventListener('click', ()=>{
+      const rows = filterData(); renderList(rows); renderMarkers(rows);
+    });
+    els.btnReset.addEventListener('click', ()=>{
+      els.q.value=''; els.gu.value=''; const rows = filterData(); renderList(rows); renderMarkers(rows);
+    });
+    els.q.addEventListener('keydown', (e)=>{ if(e.key==='Enter') els.btnSearch.click(); });
+    els.gu.addEventListener('change', ()=> els.btnSearch.click());
+    els.btnLocate.addEventListener('click', ()=>{
+      navigator.geolocation?.getCurrentPosition(pos=>{
+        const { latitude, longitude } = pos.coords;
+        map.flyTo([latitude, longitude], 15, { duration:.6 });
+        L.circle([latitude,longitude], {radius:200, color:'#2563eb'}).addTo(map);
+      }, err=> alert('Không lấy được vị trí. Hãy bật quyền Location.'));
+    });
+    els.btnFit.addEventListener('click', ()=> {
+      if(!markers.length) return;
+      const b = L.latLngBounds(markers.map(m=>m.getLatLng()));
+      map.fitBounds(b, { padding:[30,30] });
+    });
+    els.toggleList.addEventListener('click', ()=>{
+      els.side.style.display = (els.side.style.display==='none' ? '' : 'none');
     });
 
-    // 5) Thêm marker
-    const bounds = [];
-    oliveyoungStores.forEach(p => {
-      L.marker([p.lat, p.lng], { icon: oliveIcon })
-        .bindPopup(`<b>${p.name}</b><br>${p.address}`)
-        .addTo(map);
-      bounds.push([p.lat, p.lng]);
-    });
-    if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+    // Start
+    boot();
   </script>
 </body>
 </html>
