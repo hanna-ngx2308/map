@@ -1,92 +1,126 @@
-[
-  {
-    "name": "올리브영 명동 타운 (Myeongdong Global)",
-    "address": "서울특별시 중구 명동길 53 1–2층",
-    "lat": 37.5649,
-    "lng": 126.9855
-  },
-  {
-    "name": "올리브영 시청역점",
-    "address": "서울특별시 중구 세종대로16길 1 1층",
-    "lat": 37.5658,
-    "lng": 126.9753
-  },
-  {
-    "name": "올리브영 명동역점",
-    "address": "서울특별시 중구 퇴계로 127 1층",
-    "lat": 37.5610,
-    "lng": 126.9862
-  },
-  {
-    "name": "올리브영 종로YBM점",
-    "address": "서울특별시 종로구 종로 104",
-    "lat": 37.5699,
-    "lng": 126.9865
-  },
-  {
-    "name": "올리브영 성수역점",
-    "address": "서울특별시 성동구 아차산로 91",
-    "lat": 37.5445,
-    "lng": 127.0564
-  },
-  {
-    "name": "올리브영 삼성점",
-    "address": "서울특별시 강남구 테헤란로108길 22",
-    "lat": 37.5088,
-    "lng": 127.0616
-  },
-  {
-    "name": "올리브영 청담사거리점",
-    "address": "서울특별시 강남구 도산대로89길 8",
-    "lat": 37.5247,
-    "lng": 127.0415
-  },
-  {
-    "name": "올리브영 남역삼점",
-    "address": "서울특별시 강남구 논현로 318",
-    "lat": 37.4968,
-    "lng": 127.0319
-  },
-  {
-    "name": "올리브영 석촌호수로점",
-    "address": "서울특별시 송파구 석촌호수로 88 1층",
-    "lat": 37.5065,
-    "lng": 127.1069
-  },
-  {
-    "name": "올리브영 구파발역점",
-    "address": "서울특별시 은평구 진관2로 12",
-    "lat": 37.6368,
-    "lng": 126.9188
-  },
-  {
-    "name": "올리브영 경희대점",
-    "address": "서울특별시 동대문구 경희대로 2",
-    "lat": 37.5946,
-    "lng": 127.0525
-  },
-  {
-    "name": "올리브영 광운대역점",
-    "address": "서울특별시 노원구 석계로 102 1층 2호",
-    "lat": 37.6230,
-    "lng": 127.0618
-  },
-  {
-    "name": "올리브영 녹두거리점",
-    "address": "서울특별시 관악구 신림로 127 1층",
-    "lat": 37.4826,
-    "lng": 126.9309
-  },
-  {
-    "name": "올리브영 문래점",
-    "address": "서울특별시 영등포구 선유로 63 1층",
-    "lat": 37.5172,
-    "lng": 126.8950
-  },
-  {
-    "name": "올리브영 길동역점",
-    "address": "서울특별시 강동구 양재대로 1481 1층",
-    "lat": 37.5352,
-    "lng": 127.1427
+/**
+ * Crawl Subway Korea "매장찾기" (mobile) → lọc cửa hàng ở Seoul → geocode → subway_seoul.json
+ * Yêu cầu:
+ *   - Node.js 18+
+ *   - npm i puppeteer axios
+ *   - Kakao REST API Key (환경변수 KAKAO_REST_KEY)
+ *
+ * Chạy:
+ *   KAKAO_REST_KEY=xxxxx node crawl_subway_seoul.js
+ *
+ * Nguồn danh sách: https://m.subway.co.kr/more/findStore/list  (총 650개 매장) 
+ */
+import fs from 'fs/promises';
+import axios from 'axios';
+import puppeteer from 'puppeteer';
+
+// ---- cấu hình ----
+const LIST_URL = 'https://m.subway.co.kr/more/findStore/list';
+const OUTFILE  = 'subway_seoul.json';
+const KAKAO_KEY = process.env.KAKAO_REST_KEY; // https://developers.kakao.com/
+const KAKAO_GEOCODE_URL = 'https://dapi.kakao.com/v2/local/search/address.json';
+
+// regex nhận diện Seoul
+const SEOUL_TOKEN = /서울특별시|Seoul/i;
+
+// geocode 1 địa chỉ bằng Kakao
+async function geocode(address) {
+  if (!KAKAO_KEY) return null;
+  try {
+    const res = await axios.get(KAKAO_GEOCODE_URL, {
+      params: { query: address },
+      headers: { Authorization: `KakaoAK ${KAKAO_KEY}` },
+      timeout: 15000,
+    });
+    const doc = res.data?.documents?.[0];
+    if (!doc) return null;
+    // Kakao trả về x=lng, y=lat
+    return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
+  } catch (e) {
+    console.warn('Geocode fail:', address, e.message);
+    return null;
   }
-]
+}
+
+async function crawl() {
+  const browser = await puppeteer.launch({
+    headless: true,
+    defaultViewport: { width: 420, height: 900 }
+  });
+  const page = await browser.newPage();
+  await page.goto(LIST_URL, { waitUntil: 'domcontentloaded' });
+
+  // Trang mobile hiển thị danh sách cửa hàng theo thẻ; ta sẽ scroll để tải thêm (nếu có “더보기”/lazy load)
+  // Chiến lược: lặp scroll xuống đáy + chờ nội dung mới; dừng nếu không tăng số item sau vài vòng.
+  let prevCount = 0;
+  for (let i = 0; i < 30; i++) { // đủ sâu cho toàn Hàn (650 cửa hàng)
+    const count = await page.$$eval('body *', (els) => els.length);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1000);
+    const count2 = await page.$$eval('body *', (els) => els.length);
+    if (count2 === count || count2 === prevCount) break;
+    prevCount = count2;
+  }
+
+  // Trích dữ liệu: tuỳ cấu trúc DOM, bạn có thể cần điều chỉnh selectors.
+  // Thông thường mỗi cửa hàng hiển thị "매장이름", "주소", "전화".
+  const items = await page.$$eval('body *', (nodes) => {
+    // Heuristic: lấy các đoạn text có “서울특별시” (địa chỉ) + dòng trước nó là tên
+    const texts = nodes.map(n => n.innerText?.trim()).filter(Boolean);
+    const rows = [];
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i];
+      if (/서울특별시/.test(t)) {
+        // thử lấy tên cửa hàng ở gần đó (dòng trước hoặc trên)
+        const name = texts[i - 1]?.trim() || '';
+        const addr = t.trim();
+        // lọc nhiễu: bỏ các dòng hệ thống/không phải địa chỉ thật
+        if (name && addr.length > 6) {
+          rows.push({ name, address: addr });
+        }
+      }
+    }
+    // Loại bỏ trùng bằng key name+addr
+    const uniq = new Map();
+    rows.forEach(r => uniq.set(`${r.name}__${r.address}`, r));
+    return Array.from(uniq.values());
+  });
+
+  await browser.close();
+
+  // Lọc Seoul & geocode
+  const seoul = items.filter(it => SEOUL_TOKEN.test(it.address));
+  const out = [];
+  for (const it of seoul) {
+    const geo = await geocode(it.address);
+    out.push({
+      name: it.name,
+      address: it.address,
+      lat: geo?.lat || null,
+      lng: geo?.lng || null,
+      gu: (() => {
+        const m = it.address.match(/(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구)/);
+        return m ? m[1] : '';
+      })()
+    });
+  }
+
+  // Điền toạ độ còn thiếu bằng lần 2: thử rút gọn địa chỉ (không dùng số tầng)
+  if (KAKAO_KEY) {
+    for (const it of out) {
+      if (it.lat && it.lng) continue;
+      const liteAddr = it.address.replace(/\d+층.*$/,'').replace(/\s{2,}/g,' ').trim();
+      const geo2 = await geocode(liteAddr);
+      if (geo2) { it.lat = geo2.lat; it.lng = geo2.lng; }
+    }
+  }
+
+  // Xuất file
+  await fs.writeFile(OUTFILE, JSON.stringify(out, null, 2), 'utf-8');
+  console.log(`Saved ${out.length} Seoul Subway stores to ${OUTFILE}`);
+}
+
+crawl().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
