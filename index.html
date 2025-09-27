@@ -3,53 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Seoul Subway 매장 지도</title>
+  <title>서울 써브웨이 매장 지도</title>
 
   <!-- Leaflet & MarkerCluster CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 
   <style>
-    html,body{height:100%;margin:0;background:#f6f7f9;
+    :root{ --bg:#f6f7f9; --border:#e5e7eb; --muted:#64748b; --brand:#1da64a; }
+    html,body{height:100%;margin:0;background:var(--bg);
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif}
     #map{height:100vh;width:100%}
     .topbar{
       position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;
-      background:rgba(255,255,255,.95);border:1px solid #e5e7eb;border-radius:14px;
-      padding:8px 14px;box-shadow:0 4px 16px rgba(0,0,0,.08)
+      background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:14px;
+      padding:8px 14px;box-shadow:0 4px 16px rgba(0,0,0,.08);display:flex;gap:10px;align-items:center
     }
+    .btn{border:1px solid var(--border);background:#fff;padding:6px 10px;border-radius:10px;cursor:pointer}
+    .btn:hover{background:#f2f2f2}
     .legend{
       position:fixed;right:12px;bottom:12px;z-index:1000;
-      background:rgba(255,255,255,.94);border:1px solid #e5e7eb;border-radius:12px;
-      padding:8px 10px;font-size:12px
+      background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:12px;
+      padding:8px 10px;font-size:12px;color:var(--muted)
     }
-    .logo-swatch{width:14px;height:14px;border-radius:4px;background:#1da64a;display:inline-block;margin-right:6px}
-    .btn{
-      position:fixed;top:12px;right:12px;z-index:1000;
-      border:1px solid #e5e7eb;background:#fff;padding:8px 12px;border-radius:10px;cursor:pointer
+    .logo-swatch{width:14px;height:14px;border-radius:4px;background:var(--brand);display:inline-block;margin-right:6px}
+    .notice{
+      position:fixed;left:12px;bottom:12px;z-index:1000;
+      background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:12px;
+      padding:8px 10px;font-size:12px;color:var(--muted);display:none
     }
   </style>
 </head>
 <body>
-  <div class="topbar"><b>Seoul Subway (샌드위치) 매장 지도</b></div>
-  <button id="fitAll" class="btn">모두 보기</button>
+  <div class="topbar">
+    <b>서울 써브웨이 매장 지도</b>
+    <button id="fitAll" class="btn">모두 보기</button>
+  </div>
   <div id="map"></div>
-  <div class="legend"><span class="logo-swatch"></span>Subway 매장 · CartoDB Positron</div>
+  <div class="legend"><span class="logo-swatch"></span>써브웨이 매장 · CartoDB Positron</div>
+  <div id="notice" class="notice"></div>
 
   <!-- Leaflet & MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // 1) Init map with light gray basemap (CartoDB Positron)
+    // 1) Init map (light gray basemap)
     const map = L.map('map').setView([37.5665, 126.9780], 12);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap & CARTO'
     }).addTo(map);
 
-    // 2) Custom Subway-like SVG marker icon (xanh)
+    // 2) Marker icon (Subway-like green SVG)
     const svgIcon = (size=34) => {
       const svg = encodeURIComponent(`
         <svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 48 48'>
@@ -58,62 +65,55 @@
         </svg>
       `);
       return L.icon({
-        iconUrl: 'data:image/svg+xml;charset=UTF-8,' + svg,
-        iconSize: [size, size],
-        iconAnchor: [size/2, size - 4],
-        popupAnchor: [0, -size/2]
+        iconUrl:'data:image/svg+xml;charset=UTF-8,'+svg,
+        iconSize:[size,size], iconAnchor:[size/2,size-4], popupAnchor:[0,-size/2]
       });
     };
     const markerIcon = svgIcon(36);
 
-    // 3) Marker cluster (gom cụm hiển số khi thu nhỏ)
+    // 3) Cluster layer
     const clusters = L.markerClusterGroup({
-      chunkedLoading: true,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      maxClusterRadius: 55
+      chunkedLoading:true, spiderfyOnMaxZoom:true, showCoverageOnHover:false, maxClusterRadius:55
     }).addTo(map);
 
-    // 4) Helper: format address text
-    const fmtAddr = (a) => {
-      if (!a) return '';
-      const parts = [];
-      if (a.road) parts.push(a.road);
-      if (a.jibeon) parts.push(`(${a.jibeon})`);
-      return parts.join(' ');
-    };
+    // 4) Helpers
+    const fmtAddr = (a) => !a ? '' : [a.road, a.jibeon ? '('+a.jibeon+')' : null].filter(Boolean).join(' ');
+    const notice = document.getElementById('notice');
+    function showNotice(msg){ notice.textContent = msg; notice.style.display = 'block'; }
 
-    // 5) Load data from JSON file placed next to this HTML
-    async function loadAndRender() {
-      const resp = await fetch('data.json'); // đổi tên nếu file của bạn khác
-      const stores = await resp.json();
+    // 5) Load JSON and render (expects subway_seoul.json in same folder)
+    async function loadAndRender(){
+      let stores = [];
+      try{
+        const res = await fetch('subway_seoul.json', { cache:'no-cache' });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        stores = await res.json();
+      }catch(e){
+        showNotice('⚠️ "subway_seoul.json" 파일을 불러올 수 없습니다. HTML과 같은 폴더에 JSON을 두고 새로고침 해보세요.');
+        return;
+      }
 
       const bounds = [];
-      for (const s of stores) {
-        // Chỉ vẽ marker khi có toạ độ geo
-        if (!s.geo || typeof s.geo.lat !== 'number' || typeof s.geo.lng !== 'number') continue;
-
-        const popupHtml = `
+      for(const s of stores){
+        if(!s.geo || typeof s.geo.lat!=='number' || typeof s.geo.lng!=='number') continue;
+        const popup = `
           <div style="font-size:14px;">
             <div style="font-weight:700;margin-bottom:4px;">${s.name}</div>
             <div>${fmtAddr(s.address)}</div>
+            ${s.phone ? `<div style="margin-top:4px;">☎ ${s.phone}</div>` : ''}
           </div>
         `;
-
-        const m = L
-          .marker([s.geo.lat, s.geo.lng], { icon: markerIcon })
-          .bindPopup(popupHtml);
-
+        const m = L.marker([s.geo.lat, s.geo.lng], { icon: markerIcon }).bindPopup(popup);
         clusters.addLayer(m);
         bounds.push([s.geo.lat, s.geo.lng]);
       }
-
-      if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
+      if(bounds.length) map.fitBounds(bounds, { padding:[40,40] });
+      else showNotice('ℹ️ JSON에 좌표(geo)가 없습니다. 지오코딩 후 사용하세요.');
     }
 
     loadAndRender();
 
-    // 6) Fit all button
+    // 6) Fit all
     document.getElementById('fitAll').addEventListener('click', () => {
       const b = clusters.getBounds();
       if (b.isValid()) map.fitBounds(b, { padding: [40, 40] });
